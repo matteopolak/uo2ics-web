@@ -1,5 +1,4 @@
 import { ICalExpander } from '$lib/ical-expander';
-import { type EventInput, type EventSourceFuncArg } from '@fullcalendar/core';
 import type { DateRange } from '@fullcalendar/core/internal';
 import { addDays } from '@fullcalendar/core/internal';
 import type { Event } from 'ical.js';
@@ -13,16 +12,12 @@ function expandICalEvents(iCalExpander: ICalExpander, range: DateRange): EventIn
 	const iCalRes = iCalExpander.between(rangeStart, rangeEnd); // end inclusive. will give extra results
 	const expanded: EventInput[] = [];
 
-	// TODO: instead of using startDate/endDate.toString to communicate allDay,
-	// we can query startDate/endDate.isDate. More efficient to avoid formatting/reparsing.
-
 	// single events
 	for (const iCalEvent of iCalRes.events) {
 		expanded.push({
 			...buildNonDateProps(iCalEvent),
-			start: iCalEvent.startDate.toString(),
-			// @ts-expect-error - `null` is supported
-			end: specifiesEnd(iCalEvent) && iCalEvent.endDate ? iCalEvent.endDate.toString() : null
+			start: iCalEvent.startDate.toJSDate(),
+			end: specifiesEnd(iCalEvent) && iCalEvent.endDate ? iCalEvent.endDate.toJSDate() : new Date()
 		});
 	}
 
@@ -31,31 +26,26 @@ function expandICalEvents(iCalExpander: ICalExpander, range: DateRange): EventIn
 		const iCalEvent = iCalOccurence.item;
 		expanded.push({
 			...buildNonDateProps(iCalEvent),
-			start: iCalOccurence.startDate.toString(),
-			// @ts-expect-error - `null` is supported
+			start: iCalOccurence.startDate.toJSDate(),
 			end:
-				specifiesEnd(iCalEvent) && iCalOccurence.endDate ? iCalOccurence.endDate.toString() : null
+				specifiesEnd(iCalEvent) && iCalOccurence.endDate
+					? iCalOccurence.endDate.toJSDate()
+					: new Date()
 		});
 	}
 
 	return expanded;
 }
 
-function buildNonDateProps(iCalEvent: Event): EventInput {
+function buildNonDateProps(iCalEvent: Event): Partial<EventInput> {
 	return {
 		title: iCalEvent.summary,
-		url: extractEventUrl(iCalEvent),
 		extendedProps: {
 			location: iCalEvent.location,
 			organizer: iCalEvent.organizer,
 			description: iCalEvent.description
 		}
 	};
-}
-
-function extractEventUrl(iCalEvent: Event): string {
-	const urlProp = iCalEvent.component.getFirstProperty('url');
-	return urlProp ? urlProp.getFirstValue() : '';
 }
 
 function specifiesEnd(iCalEvent: Event) {
@@ -65,13 +55,51 @@ function specifiesEnd(iCalEvent: Event) {
 	);
 }
 
-export function createEventSource(ics: string) {
+export type FetchInfo = {
+	start: Date;
+	end: Date;
+};
+
+export type Source = {
+	events(
+		info: FetchInfo,
+		success: (events: Array<EventInput>) => void,
+		failure: (errorInfo: object) => void
+	): void;
+};
+
+export type EventInput = {
+	id?: number | string;
+	start: Date;
+	end: Date;
+	title?: string;
+	editable?: boolean;
+	startEditable?: boolean;
+	durationEditable?: boolean;
+	resourceIds?: string | number | Array<string | number>;
+	resourceId?: string | number | Array<string | number>;
+	display?: 'auto' | 'background';
+	backgroundColor?: string;
+	textColor?: string;
+	color?: string;
+	classNames?: string | string[];
+	className?: string | string[];
+	styles?: string | string[];
+	style?: string | string[];
+	extendedProps?: Record<string, unknown>;
+};
+
+export function createEventSource(ics: string): Source {
 	const expander = new ICalExpander({ ics });
 
-	return async (arg: EventSourceFuncArg): Promise<EventInput[]> => {
-		return expandICalEvents(expander, {
-			start: arg.start,
-			end: arg.end
-		});
+	return {
+		events(info, success) {
+			success(
+				expandICalEvents(expander, {
+					start: info.start,
+					end: info.end
+				})
+			);
+		}
 	};
 }

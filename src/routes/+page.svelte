@@ -1,75 +1,97 @@
 <script lang="ts">
+	import { UploadIcon, LoaderPinwheel } from 'lucide-svelte';
+	import { toast } from 'svelte-sonner';
 	import init, { fromHtml } from '@matteopolak/uo2ics';
-	import { Calendar } from '@fullcalendar/core';
-	import dayGridPlugin from '@fullcalendar/daygrid';
 
-	import { createEventSource } from '$lib/plugins/icalendar';
-	import { downloadCalendar } from '$lib/download';
+	import * as Card from '$lib/components/ui/card';
+	import { calendars } from '$lib/stores';
+	import { goto, preloadData } from '$app/navigation';
 
-	type CalendarData = {
-		name: string;
-		ics: Promise<string>;
-	};
-
+	let active = $state(false);
+	let fileInput = $state<HTMLInputElement>();
 	let files = $state<FileList>();
-	let calendar: Calendar;
-	let calendars: CalendarData[] = $state([]);
-
-	let div = $state<HTMLDivElement>();
+	let loading = $state(false);
 
 	$effect(() => {
-		if (!div) return;
-
-		calendar = new Calendar(div, {
-			plugins: [dayGridPlugin]
-		});
-
-		calendar.render();
+		if (files?.length) onCalendarAttach(files);
 	});
 
-	let done = $state(false);
+	function onDropCalendar(event: DragEvent) {
+		event.preventDefault();
+		active = false;
 
-	$effect(() => {
-		if (!files) return;
-		if (done) return;
+		if (loading) return;
 
-		done = true;
+		if (!event.dataTransfer?.files?.length) return;
 
-		for (const file of files) {
-			console.log('file', file);
-			onCalendarAdd(file);
+		for (const file of event.dataTransfer.files) {
+			if (!file.type.includes('html')) {
+				toast.error('Upload the HTML file of your "My Course Schedule" page.');
+				return;
+			}
 		}
-	});
 
-	async function onCalendarAdd(file: File) {
-		const { promise, resolve } = Promise.withResolvers<string>();
+		onCalendarAttach(event.dataTransfer.files);
+	}
 
-		calendars.push({
-			name: file.name,
-			ics: promise
-		});
+	function onSelectCalendar() {
+		if (loading) return;
+
+		fileInput?.click();
+	}
+
+	async function onCalendarAttach(files: FileList) {
+		loading = true;
+		const preload = preloadData('/view');
 
 		await init();
 
-		const buffer = await file.arrayBuffer();
-		const ics = fromHtml(new Uint8Array(buffer));
+		for (const file of files) {
+			const buffer = await file.arrayBuffer();
+			const ics = fromHtml(new Uint8Array(buffer));
 
-		calendar.addEventSource(createEventSource(ics));
-		resolve(ics);
+			$calendars.push({
+				name: file.name,
+				ics
+			});
+		}
+
+		await preload;
+		goto('/view');
 	}
 </script>
 
-<input type="file" accept=".html" bind:files />
+<input type="file" accept=".html" hidden bind:this={fileInput} bind:files multiple />
 
-{#each calendars as calendar}
-	<p>{calendar.name}</p>
-	{#await calendar.ics}
-		loading...
-	{:then ics}
-		<button onclick={() => downloadCalendar(ics)}>download</button>
-	{:catch error}
-		<p>{error.message}</p>
-	{/await}
-{/each}
-
-<div bind:this={div}></div>
+<div class="flex max-h-screen min-h-screen place-items-center justify-center p-4">
+	<Card.Root
+		ondrop={onDropCalendar}
+		ondragover={(e) => {
+			e.preventDefault();
+			active = true;
+		}}
+		ondragenter={() => (active = true)}
+		ondragleave={() => (active = false)}
+		onclick={onSelectCalendar}
+		role="button"
+		tabindex={0}
+		class="transition-all duration-200 {loading
+			? 'aspect-square cursor-pointer rounded-full'
+			: `aspect-[9/16] w-full max-w-xl border-2 md:aspect-video ${
+					active
+						? 'border-primary/50 bg-card-foreground/5'
+						: 'border-dashed hover:border-solid hover:border-primary/50 hover:bg-card-foreground/5'
+				}`}"
+	>
+		<Card.Content
+			class="flex h-full flex-col place-items-center justify-center gap-2 {loading ? 'p-0' : ''}"
+		>
+			{#if loading}
+				<LoaderPinwheel class="h-full w-16 animate-spin" />
+			{:else}
+				<UploadIcon />
+				<p class="text-sm text-muted-foreground">Drop your calendar here</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+</div>
