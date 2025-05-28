@@ -17,9 +17,15 @@
 	$effect(() => {
 		for (const input of $calendars) {
 			if (added.has(input)) continue;
-
 			added.add(input);
-			sources.push(createEventSource(input.ics));
+
+			const source = createEventSource(input.ics);
+			sources.push(source);
+
+			// skip calendar to source.startDate
+			if (source.startDate) {
+				calendar.setOption('date', source.startDate);
+			}
 		}
 
 		calendar.setOption('eventSources', sources);

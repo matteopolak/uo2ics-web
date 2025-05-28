@@ -66,6 +66,7 @@ export type Source = {
 		success: (events: Array<EventInput>) => void,
 		failure: (errorInfo: object) => void
 	): void;
+	startDate: Date;
 };
 
 export type EventInput = {
@@ -100,6 +101,7 @@ export function createEventSource(ics: string): Source {
 					end: info.end
 				})
 			);
-		}
+		},
+		startDate: expander.startDate
 	};
 }

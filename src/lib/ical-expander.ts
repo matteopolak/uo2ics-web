@@ -13,6 +13,7 @@ export class ICalExpander {
 	private skipInvalidDates: boolean;
 	private component: Component;
 	private events: Event[];
+	public startDate: Date;
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private raw: any;
@@ -26,6 +27,22 @@ export class ICalExpander {
 		this.events = this.component
 			.getAllSubcomponents('vevent')
 			.map((vevent) => new ic.Event(vevent));
+
+		this.startDate = new Date();
+
+		for (const event of this.events) {
+			// If the event has no start date, we set it to the current date
+			if (!event.startDate) {
+				continue;
+			}
+
+			// if current date is before this.startDate, update startDate
+			const eventStartDate = event.startDate.toJSDate();
+
+			if (eventStartDate < this.startDate) {
+				this.startDate = eventStartDate;
+			}
+		}
 
 		if (this.skipInvalidDates) {
 			this.events = this.events.filter((evt) => {
