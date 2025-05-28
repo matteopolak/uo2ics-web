@@ -28,21 +28,23 @@ export class ICalExpander {
 			.getAllSubcomponents('vevent')
 			.map((vevent) => new ic.Event(vevent));
 
-		this.startDate = new Date();
+		let min: Date | undefined;
 
 		for (const event of this.events) {
-			// If the event has no start date, we set it to the current date
-			if (!event.startDate) {
+			const s = event.iterator().next();
+
+			if (!s) {
 				continue;
 			}
 
-			// if current date is before this.startDate, update startDate
-			const eventStartDate = event.startDate.toJSDate();
+			const start = s.toJSDate();
 
-			if (eventStartDate < this.startDate) {
-				this.startDate = eventStartDate;
+			if (!min || start < min) {
+				min = start;
 			}
 		}
+
+		this.startDate = min || new Date();
 
 		if (this.skipInvalidDates) {
 			this.events = this.events.filter((evt) => {
