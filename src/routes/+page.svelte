@@ -46,6 +46,8 @@
 
 		await init();
 
+		$calendars.splice(0, $calendars.length);
+
 		for (const file of files) {
 			const buffer = await file.arrayBuffer();
 			const ics = fromHtml(new Uint8Array(buffer));
@@ -55,6 +57,8 @@
 				ics
 			});
 		}
+
+		localStorage.setItem('calendars', JSON.stringify($calendars));
 
 		await preload;
 		goto('/view');
